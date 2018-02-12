@@ -10,10 +10,14 @@ namespace HelloInputField
         IVrInputField,
         ICanvasElement,
         IUpdateSelectedHandler,
-        ICaretNavigator,
         IInputFieldController,
         IDragHandler
     {
+        enum LineType
+        {
+            SingleLine,
+            MultiLine,
+        }
 
 #pragma warning disable CS0649
 
@@ -26,11 +30,14 @@ namespace HelloInputField
         [SerializeField]
         private Color _selectionColor = new Color(168f / 255f, 206f / 255f, 255f / 255f, 192f / 255f);
 
+        [SerializeField]
+        private LineType _lineType = LineType.SingleLine;
+
 #pragma warning restore CS0649
 
-        private TextGenerator _textGenerator;
+        private AbstractInputField Impl { get; set; }
 
-        private VrInputFieldImpl Impl { get; set; }
+        private ITextComponentWrapper _editableText;
 
         public string TextValue
         {
@@ -65,6 +72,11 @@ namespace HelloInputField
 
         public bool IsInteractive()
         {
+            if (Impl == null)
+            {
+                return false;
+            }
+
             return Impl.IsInteractive();
         }
 
@@ -81,19 +93,34 @@ namespace HelloInputField
         protected override void Start()
         {
             base.Start();
-            _textGenerator = new TextGenerator();
-            Impl = new VrInputFieldImpl(CreateCaret(),
-                new UnityTextProcessor(new System.Text.StringBuilder(), this),
-                this);
+            _editableText = new EditableText(_textComponent, new TextGenerator());
+
+            var caret = CreateCaret();
+
+            if (_lineType.Equals(LineType.SingleLine))
+            {
+                Impl = new SingleLineInputField(caret,
+                    new UnityTextProcessor(new System.Text.StringBuilder(), new CaretNavigator(caret, _editableText, this)),
+                    this,
+                    _editableText);
+            }
+            else
+            {
+                Impl = new MultiLineInputField(caret,
+                    new UnityTextProcessor(new System.Text.StringBuilder(), new CaretNavigator(caret, _editableText, this)),
+                    this,
+                    _editableText);
+            }
         }
 
         private ICaret CreateCaret()
         {
-            GameObject caret = new GameObject(transform.name + " Caret", typeof(DefaultCaret));
-            caret.hideFlags = HideFlags.DontSave;
-            caret.transform.SetParent(_textComponent.transform.parent);
-
-            return caret.GetComponent<ICaret>();
+            GameObject caretObj = new GameObject(transform.name + " Caret", typeof(DefaultCaret));
+            caretObj.hideFlags = HideFlags.DontSave;
+            caretObj.transform.SetParent(_textComponent.transform.parent);
+            ICaret caret = caretObj.GetComponent<ICaret>();
+            caret.InputFieldController = this;
+            return caret;
         }
 
         public void RegisterTextComponentDirtyCallbacks(Text textComponent)
@@ -112,7 +139,7 @@ namespace HelloInputField
             textComponent.UnregisterDirtyVerticesCallback(MarkGeometryAsDirty);
         }
 
-        private void MarkGeometryAsDirty()
+        public void MarkGeometryAsDirty()
         {
 #if UNITY_EDITOR
             if (!Application.isPlaying || UnityEditor.PrefabUtility.GetPrefabObject(gameObject) != null)
@@ -128,35 +155,9 @@ namespace HelloInputField
             switch (executing)
             {
                 case CanvasUpdate.LatePreRender:
-                    Color color;
-                    Impl.Caret.Rebuild(CalculateCaretDrawRect(RoundedTextPivotLocalPosition(_textComponent), out color), color);
+                    Impl.DrawCaretOrSelection(_editableText);
                     break;
             }
-        }
-
-        private Rect CalculateCaretDrawRect(Vector2 offset, out Color color)
-        {
-            int index = Impl.Caret.GetIndex() - Impl.DrawStart;
-            int selectionIndex = Mathf.Min(Mathf.Max(Impl.Caret.GetSelectionIndex() - Impl.DrawStart, 0), GetDisplayedTextLength());
-            bool hasSelection = index != selectionIndex;
-            Vector2 cursorPos = CursorPosition(_textComponent.cachedTextGenerator, index);
-            Vector2 selectionPos = CursorPosition(_textComponent.cachedTextGenerator, selectionIndex);
-
-            float height = TextHeight(_textComponent);
-
-            color = hasSelection ? _selectionColor : Color.black;
-
-            if (index > selectionIndex)
-            {
-                Vector2 temp = selectionPos;
-                selectionPos = cursorPos;
-                cursorPos = temp;
-            }
-
-            return new Rect(cursorPos.x + offset.x,
-                cursorPos.y - height + offset.y,
-                hasSelection ? Mathf.Abs(selectionPos.x - cursorPos.x) : 1,
-                height);
         }
 
         public void LayoutComplete()
@@ -172,44 +173,10 @@ namespace HelloInputField
             Impl.UpdateText();
         }
 
-        public void PopulateText(string text) {
-            _textGenerator.PopulateWithErrors(
-                text,
-                _textComponent.GetGenerationSettings(_textComponent.rectTransform.rect.size),
-                gameObject
-                );
-
+        public void PopulateText(string text)
+        {
+            _editableText.Populate(text, gameObject);
             MarkGeometryAsDirty();
-        }
-
-        private float TextHeight(Text textComponent)
-        {
-            return textComponent.cachedTextGenerator.lineCount > 0 ?
-                textComponent.cachedTextGenerator.lines[0].height : 0;
-        }
-
-        private Vector2 RoundedTextPivotLocalPosition(Text textComponent)
-        {
-            Rect inputRect = textComponent.rectTransform.rect;
-            Vector2 textAnchorPivot = Text.GetTextAnchorPivot(textComponent.alignment);
-            Vector2 refPoint = Vector2.zero;
-            refPoint.x = Mathf.Lerp(inputRect.xMin, inputRect.xMax, textAnchorPivot.x);
-            refPoint.y = Mathf.Lerp(inputRect.yMin, inputRect.yMax, textAnchorPivot.y);
-
-            Vector2 pixelPerfectRefPoint = textComponent.PixelAdjustPoint(refPoint);
-
-            Vector2 rounddedRefPoint = pixelPerfectRefPoint - refPoint + Vector2.Scale(inputRect.size, textAnchorPivot);
-            rounddedRefPoint.x = rounddedRefPoint.x - Mathf.Floor(0.5f + rounddedRefPoint.x);
-            rounddedRefPoint.y = rounddedRefPoint.y - Mathf.Floor(0.5f + rounddedRefPoint.y);
-
-            return rounddedRefPoint;
-        }
-
-        private Vector2 CursorPosition(TextGenerator gen, int index)
-        {
-            index = Mathf.Clamp(index, 0, gen.characterCount - 1);
-            UICharInfo cursorChar = gen.characters[index];
-            return new Vector2(cursorChar.cursorPos.x, cursorChar.cursorPos.y);
         }
 
 #if UNITY_EDITOR
@@ -252,21 +219,9 @@ namespace HelloInputField
        public void OnUpdateSelected(BaseEventData eventData){}
 #endif
 
-        public void MoveCaretTo(int index, bool withSelection)
-        {
-            index = Mathf.Clamp(index, 0, TextValue.Length);
-            Impl.Caret.MoveTo(index, withSelection);
-            UpdateText();
-        }
-
-        public Vector2 DisplayRectExtents()
-        {
-            return _textComponent.cachedTextGenerator.rectExtents.size;
-        }
-
         public void UpdateDisplayText(string text)
         {
-            _textComponent.text = text;
+            _editableText.UpdateDisplayText(text);
             _placeHolder.SetActive(text.Equals(string.Empty));
         }
 
@@ -275,29 +230,9 @@ namespace HelloInputField
             // TODO: add event.
         }
 
-        public float GetCharacterWidth(int index)
-        {
-            Assert.IsTrue(index >= 0 && index < _textGenerator.characters.Count);
-            return _textGenerator.characters[index].charWidth;
-        }
-
-        public int GetDisplayedTextLength()
-        {
-            return _textComponent.text.Length;
-        }
-
         public void RegisterTextComponentDirtyCallbacks()
         {
             RegisterTextComponentDirtyCallbacks(_textComponent);
-        }
-
-        Vector2 LocalMousePosition(PointerEventData eventData)
-        {
-            Vector2 localMousePos;
-            RectTransformUtility.ScreenPointToLocalPointInRectangle(_textComponent.rectTransform,
-                eventData.position, eventData.pressEventCamera, out localMousePos);
-
-            return localMousePos;
         }
 
         public override void OnPointerDown(PointerEventData eventData)
@@ -307,16 +242,19 @@ namespace HelloInputField
                 return;
             }
 
-            EventSystem.current.SetSelectedGameObject(gameObject, eventData);
             base.OnPointerDown(eventData);
-
-            Vector2 localMousePos = LocalMousePosition(eventData);
-            MoveCaretTo(
-                GetCharacterIndexFromPosition(
-                    localMousePos, _textComponent.cachedTextGenerator, _textComponent) + Impl.DrawStart, false);
-
+            Impl.OnPointerDown(eventData);
             MarkGeometryAsDirty();
-            eventData.Use();
+        }
+
+        // prevent pressed transition animation.
+        protected override void DoStateTransition(SelectionState state, bool instant)
+        {
+            if (state.Equals(SelectionState.Pressed) && IsInteractive())
+            {
+                state = SelectionState.Highlighted;
+            }
+            base.DoStateTransition(state, instant);
         }
 
         private bool AcceptPointerEvent(PointerEventData eventData)
@@ -326,41 +264,7 @@ namespace HelloInputField
                 eventData.button == PointerEventData.InputButton.Left;
         }
 
-        private int GetCharacterIndexFromPosition(Vector2 pos, TextGenerator gen, Text textComponent) {
-            if(gen.lineCount == 0)
-            {
-                return 0;
-            }
-
-            int startCharIndex = gen.lines[0].startCharIdx;
-            int endCharIndex = GetLineEndPosition(gen, 0);
-
-            for (int i = startCharIndex; i < endCharIndex; i++)
-            {
-                if (i >= gen.characterCountVisible)
-                    break;
-
-                UICharInfo charInfo = gen.characters[i];
-                Vector2 charPos = charInfo.cursorPos / textComponent.pixelsPerUnit;
-
-                float distToCharStart = pos.x - charPos.x;
-                float distToCharEnd = charPos.x + (charInfo.charWidth / textComponent.pixelsPerUnit) - pos.x;
-                if (distToCharStart < distToCharEnd)
-                    return i;
-            }
-
-            return endCharIndex;
-        }
-
-        private int GetLineEndPosition(TextGenerator gen, int line)
-        {
-            line = Mathf.Max(line, 0);
-            if (line + 1 < gen.lines.Count)
-                return gen.lines[line + 1].startCharIdx - 1;
-            return gen.characterCountVisible;
-        }
-
-#region Drag to highlight
+        #region Drag to highlight
 
         public void OnDrag(PointerEventData eventData)
         {
@@ -369,30 +273,9 @@ namespace HelloInputField
                 return;
             }
 
-            Vector2 localMousePos = LocalMousePosition(eventData);
-            Rect rect = _textComponent.rectTransform.rect;
-            if (localMousePos.x < rect.xMin)
-            {
-                MoveCaretTo(Impl.Caret.GetIndex() - 1, true);
-                UpdateText();
-            }
-            else if (localMousePos.x > rect.xMax)
-            {
-                MoveCaretTo(Impl.Caret.GetIndex() + 1, true);
-                UpdateText();
-            }
-            else
-            {
-                MoveCaretTo(GetCharacterIndexFromPosition(
-                        localMousePos, _textComponent.cachedTextGenerator, _textComponent) + Impl.DrawStart, true);
-
-                MarkGeometryAsDirty();
-            }
-
-            eventData.Use();
+            Impl.OnDrag(eventData);
         }
 
-#endregion
+        #endregion
     }
 }
-

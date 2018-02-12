@@ -1,14 +1,17 @@
 ﻿using UnityEngine;
+using UnityEngine.UI;
 
 namespace HelloInputField
 {
     public interface ICaret
     {
+        IInputFieldController InputFieldController { get; set; }
+
         void ActivateCaret();
 
         void DeactivateCaret();
 
-        void Rebuild(Rect drawRect, Color color);
+        void Draw(Rect drawRect, Color color, VertexHelper helper);
 
         int GetIndex();
 

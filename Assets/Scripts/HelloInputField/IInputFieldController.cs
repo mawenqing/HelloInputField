@@ -1,20 +1,13 @@
-﻿using UnityEngine;
-
-namespace HelloInputField
+﻿namespace HelloInputField
 {
     public interface IInputFieldController
     {
-        void PopulateText(string text);
-
-        Vector2 DisplayRectExtents();
-
-        void UpdateDisplayText(string text);
+        void MarkGeometryAsDirty();
 
         void OnEndInput(string text);
 
-        float GetCharacterWidth(int index);
+        void UpdateDisplayText(string text);
 
-        int GetDisplayedTextLength();
-
+        void PopulateText(string text);
     }
 }
