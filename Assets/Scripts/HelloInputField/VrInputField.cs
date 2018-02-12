@@ -100,14 +100,14 @@ namespace HelloInputField
             if (_lineType.Equals(LineType.SingleLine))
             {
                 Impl = new SingleLineInputField(caret,
-                    new UnityTextProcessor(new System.Text.StringBuilder(), new CaretNavigator(caret, _editableText, this)),
+                    new SingleLineInputProcessor(new System.Text.StringBuilder(), new CaretNavigator(caret, _editableText, this)),
                     this,
                     _editableText);
             }
             else
             {
                 Impl = new MultiLineInputField(caret,
-                    new UnityTextProcessor(new System.Text.StringBuilder(), new CaretNavigator(caret, _editableText, this)),
+                    new BaseTextProcessor(new System.Text.StringBuilder(), new CaretNavigator(caret, _editableText, this)),
                     this,
                     _editableText);
             }

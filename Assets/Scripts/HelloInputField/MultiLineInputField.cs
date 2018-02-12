@@ -84,6 +84,7 @@ namespace HelloInputField
 
         protected override void DrawSelection(ICaret caret, Color color, ITextComponentWrapper text, Vector2 offset)
         {
+            // FIXME: selection drawing wrong if multi-line input contains line breaks.
             var lines = CalculateSelectionRects(caret, text, offset);
 
             using (var helper = new VertexHelper())

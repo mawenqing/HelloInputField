@@ -4,7 +4,7 @@ using UnityEngine.Assertions;
 
 namespace HelloInputField
 {
-    public class UnityTextProcessor : IInputEventProcessor
+    public class BaseTextProcessor : IInputEventProcessor
     {
         private StringBuilder _processedText;
         private ICaretNavigator _caretNavigator;
@@ -34,7 +34,7 @@ namespace HelloInputField
             }
         }
 
-        public UnityTextProcessor(StringBuilder textToProcess, ICaretNavigator receiver)
+        public BaseTextProcessor(StringBuilder textToProcess, ICaretNavigator receiver)
         {
             _processedText = textToProcess;
             _caretNavigator = receiver;
@@ -108,7 +108,7 @@ namespace HelloInputField
 
                 case KeyCode.Return:
                 case KeyCode.KeypadEnter:
-                    return false;
+                    return true;
                 case KeyCode.Escape:
                     // was canceled.
                     return false;
@@ -116,9 +116,6 @@ namespace HelloInputField
             }
 
             char c = keyEvent.character;
-            // Don't allow return chars or tabulator key to be entered into single line fields.
-            if (c == '\t' || c == '\r' || c == 10)
-                return true;
 
             // Convert carriage return and end-of-text characters to newline.
             if (c == '\r' || (int)c == 3)
@@ -129,9 +126,7 @@ namespace HelloInputField
                 return true;
             }
 
-            HandleInputChar(_processedText, caretIndex, selectionIndex, c);
-
-            return true;
+            return HandleInputChar(_processedText, caretIndex, selectionIndex, c);
         }
 
         private bool HasSelection(int index, int selectionIndex)
@@ -139,13 +134,14 @@ namespace HelloInputField
             return index != selectionIndex;
         }
 
-        private void HandleInputChar(StringBuilder text, int index, int selectionIndex, char c)
+        protected virtual bool HandleInputChar(StringBuilder text, int index, int selectionIndex, char c)
         {
             if (HasSelection(index, selectionIndex))
             {
                 Delete(text, index, selectionIndex);
             }
             Insert(text, c, index < selectionIndex ? index : selectionIndex);
+            return true;
         }
 
         private bool Ctrl(Event evt)
