@@ -143,7 +143,7 @@ namespace HelloInputField
             {
                 if (!HasSelection())
                 {
-                    _isVisible = Mathf.Sin(timer++ * 0.03f) < 0;
+                    _isVisible = Mathf.Sin(timer++ * 0.1f) < 0;
                     InputFieldController.MarkGeometryAsDirty();
                 }
                 else
