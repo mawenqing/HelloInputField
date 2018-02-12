@@ -99,8 +99,11 @@ namespace HelloInputField
                     return true;
 
                 case KeyCode.UpArrow:
+                    MoveUp(caretIndex, selectionIndex, Shift(keyEvent));
                     return true;
+
                 case KeyCode.DownArrow:
+                    MoveDown(caretIndex, selectionIndex, Shift(keyEvent));
                     return true;
 
                 case KeyCode.Return:
@@ -260,8 +263,33 @@ namespace HelloInputField
             }
             else
             {
-                _caretNavigator.MoveCaretTo(index - 1, shift);
+                _caretNavigator.MoveLeft(shift);
             }
         }
+
+        private void MoveUp(int index, int selectionIndex, bool shift)
+        {
+            if (HasSelection(index, selectionIndex) && !shift)
+            {
+                _caretNavigator.MoveCaretTo(Mathf.Min(index, selectionIndex), false);
+            }
+            else
+            {
+                _caretNavigator.MoveUp(false, shift);
+            }
+        }
+
+        private void MoveDown(int index, int selectionIndex, bool shift)
+        {
+            if (HasSelection(index, selectionIndex) && !shift)
+            {
+                _caretNavigator.MoveCaretTo(Mathf.Max(index, selectionIndex), false);
+            }
+            else
+            {
+                _caretNavigator.MoveDown(false, shift);
+            }
+        }
+
     }
 }

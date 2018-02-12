@@ -11,15 +11,13 @@ namespace HelloInputField
 	public class DefaultCaret : MonoBehaviour, ICaret
 	{
 		private Mesh _mesh;
-		private UIVertex[] _verts;
 		private int _selectionAnchorIndex = 0;
 		private int _index = 0;
-
-        private Rect _drawRect = Rect.zero;
         private bool _isVisible;
-        private Color _color;
 
         private Coroutine _blinkCoroutine;
+
+        public IInputFieldController InputFieldController { set; get; }
 
         private void Start()
         {
@@ -28,8 +26,6 @@ namespace HelloInputField
 			CaretRenderer.SetMaterial (Graphic.defaultGraphicMaterial, Texture2D.whiteTexture);
             gameObject.layer = transform.parent.gameObject.layer;
             transform.SetAsFirstSibling();
-
-			_verts = CreateVerts (Color.black);
         }
 
         private void OnDisable()
@@ -59,7 +55,7 @@ namespace HelloInputField
             StopCoroutine(_blinkCoroutine);
             _blinkCoroutine = null;
             _isVisible = false;
-            Rebuild(_drawRect, _color);
+            InputFieldController.MarkGeometryAsDirty();
 		}
 
 		public void DestroyCaret ()
@@ -85,18 +81,6 @@ namespace HelloInputField
 			_index = index;
 		}
 
-		private UIVertex[] CreateVerts (Color color)
-		{
-			UIVertex[] verts = new UIVertex[4];
-			for (int i = 0; i < verts.Length; i++) {
-				verts [i] = UIVertex.simpleVert;
-				verts [i].color = color;
-				verts [i].uv0 = Vector2.zero;
-			}
-
-			return verts;
-		}
-
 		private void SetupCursorVertsPositions (ref UIVertex[] verts, Rect drawRect)
 		{
             Assert.IsNotNull (verts);
@@ -113,27 +97,23 @@ namespace HelloInputField
             return _isVisible;
 		}
 
-        public void Rebuild(Rect drawRect, Color color)
+        public void Draw(Rect drawRect, Color color, VertexHelper helper)
         {
-            _drawRect = drawRect;
-            _color = color;
-
-            using (var helper = new VertexHelper())
+            if (IsVisible())
             {
-                if (IsVisible())
-                {
-                    GenerateCursorOrSelection(helper, ref _verts, drawRect, color);
-                }
-                helper.FillMesh(_mesh);
+                GenerateCursorOrSelection(helper, drawRect, color);
             }
-
+            helper.FillMesh(_mesh);
             CaretRenderer.SetMesh(_mesh);
         }
 
-        private void GenerateCursorOrSelection(VertexHelper helper, ref UIVertex[] verts, Rect drawRect, Color color)
+        private void GenerateCursorOrSelection(VertexHelper helper, Rect drawRect, Color color)
         {
+            var verts = new UIVertex[4];
             for (int i = 0; i < verts.Length; i++)
             {
+                verts[i] = UIVertex.simpleVert;
+                verts[i].uv0 = Vector2.zero;
                 verts[i].color = color;
             }
 
@@ -164,7 +144,7 @@ namespace HelloInputField
                 if (!HasSelection())
                 {
                     _isVisible = Mathf.Sin(timer++ * 0.03f) < 0;
-                    Rebuild(_drawRect, _color);
+                    InputFieldController.MarkGeometryAsDirty();
                 }
                 else
                 {
